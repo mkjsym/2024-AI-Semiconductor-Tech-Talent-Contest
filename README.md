@@ -1,0 +1,1 @@
+# 2024-AI-Semiconductor-Tech-Talent-Contest
