@@ -1,6 +1,13 @@
 import cv2
 from matplotlib import pyplot as plt
 import numpy as np
+import mmap
+
+#공유 메모리(시뮬레이터)에서 영상을 읽어오기 위한 설정
+#공유 메모리 크기 (RGB 이미지의 크기: 1280 * 720 * 4개 카메라)
+image_width = 1280
+image_height = 720
+shared_memory_size = image_width * image_height * 3 * 4  # 4개의 카메라 데이터 포함
 
 # Load image
 def load_image(img_path, img1_name, img2_name):
@@ -138,3 +145,19 @@ def visualize_3d(p3ds):
     ax = plt.axes(projection='3d')
     ax.scatter3D(X, Y, Z, c='b', marker='o') 
     plt.show()
+
+# 공유 메모리에서 데이터를 읽어오는 함수 (offset 기반)
+def read_from_shared_memory(memory_name, offset, size):
+    # Windows에서 태그 기반으로 메모리 매핑
+    mm = mmap.mmap(0, shared_memory_size, tagname=memory_name)
+    mm.seek(offset)  # 지정된 offset 위치로 이동
+    image_data = mm.read(size)  # 지정된 크기만큼 데이터 읽기
+    mm.close()
+    
+    # 읽은 데이터를 NumPy 배열로 변환
+    image_np = np.frombuffer(image_data, dtype=np.uint8)
+    image_np = image_np.reshape((image_height, image_width, 3))  # RGB 포맷
+    image_np = cv2.cvtColor(image_np, cv2.COLOR_BGRA2RGB)  # BGRA -> BGR 변환
+    image_np = cv2.flip(image_np, 0)  # 상하 반전
+    
+    return image_np
