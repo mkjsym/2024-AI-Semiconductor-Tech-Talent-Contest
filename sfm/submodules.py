@@ -137,4 +137,4 @@ def visualize_3d(p3ds):
     fig = plt.figure(figsize=(15,15))
     ax = plt.axes(projection='3d')
     ax.scatter3D(X, Y, Z, c='b', marker='o') 
-    plt.show() 
+    plt.show()
