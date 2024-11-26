@@ -1,47 +1,99 @@
-from ultralytics import YOLO
-import cvzone
 import cv2
-import math
+import os, subprocess, asyncio
+import time
+import threading
+
+from utils.preprocess import YOLOPreProcessor
+from utils.postprocess import ObjDetPostprocess
+from furiosa.runtime.sync import create_runner
+from furiosa.runtime import create_queue
+
+#Using Runners#########################################################################################################################################################
+model_path = r"/home/ubuntu/ym/2024-AI-Semiconductor-Tech-Talent-Contest/object_detection/yolov8n_opt_i8.onnx"
+# data_dir = "../val2017"
+# data_name = os.listdir(data_dir)[0]
+
+if os.path.exists("result"):
+    subprocess.run(["rm", "-rf", "result"])
+os.makedirs("result")
+
+#Using Runners
+def furiosa_runtime_sync(model_path, input_img):
+    with create_runner(model_path, device = "warboy(2)*1") as runner:
+        preds = runner.run([input_img]) # FuriosaAI Runtime
+        
+        return preds
 
 #use mp4 video as source
-cap = cv2.VideoCapture('rtsp://58.142.226.112:8554/mystream')
-#use webcam as source
-# cap = cv2.VideoCapture(0)
-
-model = YOLO(r'/home/ubuntu/ym/2024-AI-Semiconductor-Tech-Talent-Contest/object_detection/fire_model.pt')
-# Reading the classes
-classnames = ['fire']
+# cap = cv2.VideoCapture('rtsp://58.142.226.112:8554/mystream')
+cap = cv2.VideoCapture(r'/home/ubuntu/ym/2024-AI-Semiconductor-Tech-Talent-Contest/object_detection/fire.mp4')
+preprocessor = YOLOPreProcessor()
+postprocessor = ObjDetPostprocess()
+runner = create_runner(model_path, device = "warboy(2)*1")
 
 while cap.isOpened():
     success, frame = cap.read()
     if (not success):
         print('failed to read video')
-        continue
+        break
 
-    frame = cv2.resize(frame, (640, 480))
-    result = model(frame, stream=True)
+    input_, contexts = preprocessor(frame, new_shape=(640, 640), tensor_type="uint8")
+
+    #Using Runners
+    # result = furiosa_runtime_sync(model_path, input_)
+    result = runner.run([input_])
+    # output_img = postprocessor(result, contexts, input_)
 
     print(result)
 
-    # Getting bbox,confidence and class names information to work with
-    # for info in result:
-    #     boxes = info.boxes
-    #     for box in boxes:
-    #         confidence = box.conf[0]
-    #         confidence = math.ceil(confidence * 100)
-    #         Class = int(box.cls[0])
-    #         if confidence > 50:
-    #             x1, y1, x2, y2 = box.xyxy[0]
-    #             x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-    #             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 5)
-    #             cvzone.putTextRect(frame, f'{classnames[Class]} {confidence}%', [x1 + 8, y1 + 100],
-    #                                scale=1.5, thickness=2)
-
-    # cv2.imshow('frame', frame)
-
-    #ESC를 눌러 종료
-    # if cv2.waitKey(5) & 0xFF == 27:
-    #     break
-
 cap.release()
-# cv2.destroyAllWindows()
+
+#Using Queues#########################################################################################################################################################
+# model_path = r"/home/ubuntu/ym/2024-AI-Semiconductor-Tech-Talent-Contest/object_detection/yolov8n_opt_i8.onnx"
+# data_dir = "../val2017"
+# data_name = os.listdir(data_dir)[0]
+
+# if os.path.exists("result"):
+#     subprocess.run(["rm", "-rf", "result"])
+# os.makedirs("result")
+
+# #Using Queues
+# async def submit_with(submitter, input_, contexts):
+#     for _ in range(1000):
+#         await submitter.submit(input_, context=(contexts))
+
+# async def recv_with(receiver, input_img, data_name):
+#     postprocessor = ObjDetPostprocess()
+#     for _ in range(1000):
+#         contexts, outputs = await receiver.recv()
+#         output_img = postprocessor(outputs, contexts, input_img)
+#         cv2.imwrite(os.path.join("result", data_name), output_img)
+
+# async def furiosa_runtime_queue(model_path, input_img, input_, contexts, data_name):
+
+#     async with create_queue(
+#         model=model_path, worker_num=8, device="warboy(2)*1"
+#     ) as (submitter, receiver):
+#         submit_task = asyncio.create_task(submit_with(submitter, input_, contexts))
+#         recv_task = asyncio.create_task(recv_with(receiver, input_img, data_name))
+#         await submit_task
+#         await recv_task
+
+# #use mp4 video as source
+# cap = cv2.VideoCapture('rtsp://58.142.226.112:8554/mystream')
+# preprocessor = YOLOPreProcessor()
+
+# while cap.isOpened():
+#     success, frame = cap.read()
+#     if (not success):
+#         print('failed to read video')
+#         continue
+
+#     input_, contexts = preprocessor(frame, new_shape=(640, 640), tensor_type="uint8")
+
+#     #Using Queues
+#     result = asyncio.run(furiosa_runtime_queue(model_path, frame, input_, contexts, data_name))
+
+#     print(result)
+
+# cap.release()
