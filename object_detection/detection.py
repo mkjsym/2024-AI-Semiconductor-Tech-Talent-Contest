@@ -18,18 +18,18 @@ if os.path.exists("result"):
 os.makedirs("result")
 
 #Using Runners
-def furiosa_runtime_sync(model_path, input_img):
-    with create_runner(model_path, device = "warboy(2)*1") as runner:
-        preds = runner.run([input_img]) # FuriosaAI Runtime
+# def furiosa_runtime_sync(model_path, input_img):
+#     with create_runner(model_path, device = "warboy(2)*1") as runner:
+#         preds = runner.run([input_img]) # FuriosaAI Runtime
         
-        return preds
+#         return preds
 
 #use mp4 video as source
 # cap = cv2.VideoCapture('rtsp://58.142.226.112:8554/mystream')
 cap = cv2.VideoCapture(r'/home/ubuntu/ym/2024-AI-Semiconductor-Tech-Talent-Contest/object_detection/fire.mp4')
 preprocessor = YOLOPreProcessor()
 postprocessor = ObjDetPostprocess()
-runner = create_runner(model_path, device = "warboy(2)*1")
+runner = create_runner(model_path, device = "warboy(2)*2")
 
 while cap.isOpened():
     success, frame = cap.read()
