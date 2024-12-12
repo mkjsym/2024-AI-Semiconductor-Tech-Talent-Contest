@@ -1,0 +1,6 @@
+output_path: tracking_results
+video_path:
+  - rtmp://14.39.59.81/live/0000
+  - rtmp://14.39.59.81/live/0001
+  - rtmp://14.39.59.81/live/0002
+  - rtmp://14.39.59.81/live/0003

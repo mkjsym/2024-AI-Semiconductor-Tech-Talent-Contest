@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-cam Monitoring System</title>
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            margin: 20px 0;
+            color: #333;
+        }
+        #main-container {
+            display: flex;
+            justify-content: space-between;
+            width: 90%;
+            max-width: 1600px;
+        }
+        #video-container {
+            position: relative;
+            width: 1280px;
+            height: 720px;
+            background-color: #000;
+        }
+        #videoCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #list-container {
+            width: 300px;
+            border: 1px solid #ddd;
+            background-color: #fff;
+            padding: 10px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow-y: auto;
+        }
+        #list-container h2 {
+            text-align: center;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        #list-container ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        #list-container li {
+            padding: 10px;
+            margin-bottom: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #f7f7f7;
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+        #list-container li:hover {
+            background-color: #e6f7ff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        #list-container li.selected {
+            background-color: #bae7ff;
+            border-color: #40a9ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>Multi-cam Monitoring System</h1>
+    <div id="main-container">
+        <!-- Video Stream -->
+        <div id="video-container">
+            <img id="stream" src="http://localhost:20001/" alt="Multi-cam Stream" width="1280" height="720">
+            <canvas id="videoCanvas"></canvas>
+        </div>
+
+        <!-- Object List -->
+        <div id="list-container">
+            <h2>Detected Objects</h2>
+            <ul id="object-list"></ul>
+        </div>
+    </div>
+
+    <script>
+        const jsonUrl = "http://localhost:20001/tracking-data";
+        const objectList = document.getElementById("object-list");
+        const canvas = document.getElementById("videoCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = 1280;
+        canvas.height = 720;
+
+        const cameraCenters = [
+            [300, 240], //좌측 상단 (카메라 0)
+            [910, 240], //우측 상단 (카메라 1)
+            [300, 565], //좌측 하단 (카메라 2)
+            [910, 565], //우측 하단 (카메라 3)
+        ];
+
+        let selectedObject = null;
+        let jsonData = [];//json 데이터 저장용
+
+        function adjustBoundingBox(bbox, cameraId) {
+            const [x1, y1, x2, y2] = bbox;
+
+            //원본
+            const originalWidth = 1920;
+            const originalHeight = 1080;
+
+            //stream
+            const currentWidth = 1024;
+            const currentHeight = 574;
+
+            const xRatio = currentWidth / originalWidth;
+            const yRatio = currentHeight / originalHeight;
+
+            const [centerX, centerY] = cameraCenters[cameraId];
+
+            //x,y축 기본 조정값
+            const xOffset = 240;
+            const yOffset = 125;
+
+            const adjustedBox = [
+                centerX + (x1 - originalWidth / 2) * xRatio + xOffset,
+                centerY + (y1 - originalHeight / 2) * yRatio + yOffset,
+                centerX + (x2 - originalWidth / 2) * xRatio + xOffset,
+                centerY + (y2 - originalHeight / 2) * yRatio + yOffset,
+            ];
+
+            return adjustedBox;
+        }
+
+        function drawBoundingBox(ctx, bbox, color = "#00FF00", label = "") {
+            const [x1, y1, x2, y2] = bbox;
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+            if (label) {
+                ctx.fillStyle = color;
+                ctx.font = "16px Pretendard";
+                ctx.fillText(label, x1 + 5, y1 - 5);
+            }
+        }
+
+        async function fetchAndDrawBoundingBoxes() {
+            try {
+                const response = await fetch(jsonUrl);
+                jsonData = await response.json();
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // //디버깅용 캠 중심점
+                // cameraCenters.forEach(([cx, cy], index) => {
+                //     ctx.beginPath();
+                //     ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+                //     ctx.fillStyle = "#FF0000";
+                //     ctx.fill();
+                //     ctx.font = "14px Pretendard";
+                //     ctx.fillText(`Cam ${index}`, cx + 10, cy - 10);
+                // });
+
+                if (selectedObject !== null) {
+                    jsonData.forEach(obj => {
+                        if (obj.global_id === selectedObject) {
+                            const adjustedBox = adjustBoundingBox(obj.bbox, obj.camera_id);
+                            drawBoundingBox(ctx, adjustedBox, "#00FF00", `ID: ${obj.global_id}`);
+                        }
+                    });
+                }
+
+                updateObjectList();
+
+            } catch (error) {
+                console.error("Error fetching or drawing bounding boxes:", error);
+            }
+        }
+
+        function updateObjectList() {
+            objectList.innerHTML = "";
+            const uniqueIds = new Set();
+            jsonData.forEach((obj) => {
+                if (!uniqueIds.has(obj.global_id)) {
+                    uniqueIds.add(obj.global_id);
+                    const listItem = document.createElement("li");
+                    listItem.textContent = `ID: ${obj.global_id}`;
+                    listItem.dataset.globalId = obj.global_id;
+                    listItem.addEventListener("click", () => selectObject(obj.global_id));
+                    if (selectedObject === obj.global_id) {
+                        listItem.classList.add("selected");
+                    }
+                    objectList.appendChild(listItem);
+                }
+            });
+        }
+
+        function selectObject(globalId) {
+            selectedObject = globalId === selectedObject ? null : globalId;
+            fetchAndDrawBoundingBoxes();
+        }
+
+        setInterval(fetchAndDrawBoundingBoxes, 1000);
+    </script>
+</body>
+</html>
